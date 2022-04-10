@@ -3,6 +3,8 @@
 #include <QRect>
 #include <QMouseEvent>
 #include <QVector>
+#include <QDebug>
+
 
 // 构造函数初始化
 Board::Board(QWidget *parent) : QWidget(parent){
@@ -19,12 +21,19 @@ Board::Board(QWidget *parent) : QWidget(parent){
     }
 
     // 32个棋子初始化
-    for (int id = 0; id < 32; ++id){
-        m_chess[id].init(id);
-        m_hasChess[m_chess[id].m_row][m_chess[id].m_col] = id;
-    }
+    m_redUnder = true;
+    initRedBlack(m_redUnder);
 }
 
+
+// 执红棋黑棋初始化，red为true则红棋在下面
+void Board::initRedBlack(bool red){
+    for (int id = 0; id < 32; ++id){
+        m_chess[id].init(id, red);
+        m_hasChess[m_chess[id].m_row][m_chess[id].m_col] = id;
+    }
+    update();
+}
 
 
 // 绘制棋盘
@@ -118,16 +127,78 @@ bool Board::getRowCol(QPoint pt, int &row, int &col){
 }
 
 
+// 判断己方移动完后是否被将军，id小的是对面的
+bool Board::jiangJun(int selectId, int clkRow, int clkCol, int clkId){
+    // 我方将军id为20
+    int myJiangId = 20;
+    // *****为了防止对面在模仿的时候判定，例如客户端红棋将军黑棋，服务端模拟红棋时黑棋发现自己在送将，所以一定要走哪个用哪边将军判定！！！！
+    if (selectId < 16) {
+        myJiangId = 4;
+    }
+    // 移动完后，不能被对方所有棋子将军
+    bool flag = false;
+
+    // 假装走子
+    int origin1 = m_hasChess[clkRow][clkCol];
+    int origin2 = m_hasChess[m_chess[selectId].m_row][m_chess[selectId].m_col];
+    int origin3 = m_chess[selectId].m_row;
+    int origin4 = m_chess[selectId].m_col;
+    bool origin5 = false; if (clkId != -1) origin5 = m_chess[clkId].m_dead;
+    int origin6 = m_selectId;
+
+    m_hasChess[clkRow][clkCol] = m_hasChess[m_chess[selectId].m_row][m_chess[selectId].m_col];
+    m_hasChess[m_chess[selectId].m_row][m_chess[selectId].m_col] = -1;
+
+    m_chess[selectId].m_row = clkRow;
+    m_chess[selectId].m_col = clkCol;
+    if (clkId != -1){
+        m_chess[clkId].m_dead = true;
+    }
+
+    // 检查所有对方棋子能否将自己军，即canMove到自己将军位置
+    int jiangJunRow = m_chess[myJiangId].m_row, jiangJunCol = m_chess[myJiangId].m_col;
+    int start = 0, end = 16;
+    if (selectId < 16){
+        start = 16; end = 32;
+    }
+
+    for (int id = start; id < end; ++id){
+        if (canMove(id, jiangJunRow, jiangJunCol, myJiangId)){
+            flag = true;
+            break;
+        }
+    }
+
+    // 回退，取消假装走子
+    m_selectId = origin6;
+    if (clkId != -1) m_chess[clkId].m_dead = origin5;
+    m_chess[selectId].m_col = origin4;
+    m_chess[selectId].m_row = origin3;
+    m_hasChess[m_chess[selectId].m_row][m_chess[selectId].m_col] = origin2;
+    m_hasChess[clkRow][clkCol] = origin1;
+
+    return flag;
+}
+
+
 // 将的移动规则
 bool Board::canMoveJiang(int selectId, int clkRow, int clkCol, int clkId){
     int row = m_chess[selectId].m_row;
     int col = m_chess[selectId].m_col;
+
+    // 同一列且没有阻拦，直接吃掉对面的将
+    if (clkId != -1 && m_chess[clkId].m_type == Chess::JIANG){
+        return canMoveJu(selectId, clkRow, clkCol, clkId);
+    }
+
     // 范围在九宫格
     if (clkCol < 3 || clkCol > 5) return false;
     if (m_chess[selectId].m_red){
-        if (clkRow < 0 || clkRow > 2) return false;
+        if (!m_redUnder && (clkRow < 0 || clkRow > 2)) return false;
+        else if (m_redUnder && (clkRow < 7 || clkRow > 9)) return false;
     } else {
-        if (clkRow < 7 || clkRow > 9) return false;
+        if (!m_redUnder && (clkRow < 7 || clkRow > 9)) return false;
+        else if (m_redUnder && (clkRow < 0 || clkRow > 2)) return false;
     }
 
     // 只能上下左右移动一格
@@ -150,9 +221,11 @@ bool Board::canMoveShi(int selectId, int clkRow, int clkCol, int clkId){
     // 范围在九宫格
     if (clkCol < 3 || clkCol > 5) return false;
     if (m_chess[selectId].m_red){
-        if (clkRow < 0 || clkRow > 2) return false;
+        if (!m_redUnder && (clkRow < 0 || clkRow > 2)) return false;
+        else if (m_redUnder && (clkRow < 7 || clkRow > 9)) return false;
     } else {
-        if (clkRow < 7 || clkRow > 9) return false;
+        if (!m_redUnder && (clkRow < 7 || clkRow > 9)) return false;
+        else if (m_redUnder && (clkRow < 0 || clkRow > 2)) return false;
     }
 
     // 只能对角线移动
@@ -172,9 +245,11 @@ bool Board::canMoveShi(int selectId, int clkRow, int clkCol, int clkId){
 bool Board::canMoveXiang(int selectId, int clkRow, int clkCol, int clkId){
     // 范围在己方
     if (m_chess[selectId].m_red){
-        if (clkRow < 0 || clkRow > 4) return false;
+        if (!m_redUnder && (clkRow < 0 || clkRow > 4)) return false;
+        if (m_redUnder && (clkRow < 5 || clkRow > 9)) return false;
     } else {
-        if (clkRow < 5 || clkRow > 9) return false;
+        if (!m_redUnder && (clkRow < 5 || clkRow > 9)) return false;
+        if (m_redUnder && (clkRow < 0 || clkRow > 4)) return false;
     }
 
     // 田字格移动，不能被卡象眼
@@ -277,9 +352,9 @@ bool Board::canMoveBing(int selectId, int clkRow, int clkCol, int clkId){
     int col = m_chess[selectId].m_col;
     // 己方只能往前一步一步走，过河能左右前
     if (m_chess[selectId].m_red){
-        if (clkRow < 6){
+        if (!m_redUnder && clkRow < 5){
             if (clkRow == row + 1 && clkCol == col) return true;
-        } else {
+        } else if (!m_redUnder) {
             QVector<QVector<int>> dirs = {
                 {1, 0}, {0, 1}, {0, -1}
             };
@@ -289,12 +364,36 @@ bool Board::canMoveBing(int selectId, int clkRow, int clkCol, int clkId){
                 }
             }
         }
-    } else {
-        if (clkRow > 4){
+        if (m_redUnder && clkRow > 4){
             if (clkRow == row - 1 && clkCol == col) return true;
-        } else {
+        } else if (m_redUnder) {
             QVector<QVector<int>> dirs = {
                 {-1, 0}, {0, 1}, {0, -1}
+            };
+            for (auto dir : dirs){
+                if (row + dir[0] == clkRow && col + dir[1] == clkCol){
+                    return true;
+                }
+            }
+        }
+    } else {
+        if (!m_redUnder && clkRow > 4){
+            if (clkRow == row - 1 && clkCol == col) return true;
+        } else if (!m_redUnder) {
+            QVector<QVector<int>> dirs = {
+                {-1, 0}, {0, 1}, {0, -1}
+            };
+            for (auto dir : dirs){
+                if (row + dir[0] == clkRow && col + dir[1] == clkCol){
+                    return true;
+                }
+            }
+        }
+        if (m_redUnder && clkRow < 5){
+            if (clkRow == row + 1 && clkCol == col) return true;
+        } else if (m_redUnder) {
+            QVector<QVector<int>> dirs = {
+                {1, 0}, {0, 1}, {0, -1}
             };
             for (auto dir : dirs){
                 if (row + dir[0] == clkRow && col + dir[1] == clkCol){
@@ -311,6 +410,8 @@ bool Board::canMoveBing(int selectId, int clkRow, int clkCol, int clkId){
 
 // 实现走棋规则，这个棋子能不能动
 bool Board::canMove(int selectId, int clkRow, int clkCol, int clkId){
+    // 如果死了，那肯定是不能动的
+    if (m_chess[selectId].m_dead) return false;
     // 如果是自己，不能吃，而是取消选择
     if (selectId == clkId){
         m_selectId = -1;
@@ -344,24 +445,8 @@ bool Board::canMove(int selectId, int clkRow, int clkCol, int clkId){
 }
 
 
-
-// 鼠标点击，走子
-void Board::mouseReleaseEvent(QMouseEvent* event){
-    QPoint clkPos = event->pos();
-    // 找到最靠近的交叉点，然后判断在不在圆内
-    // TODO 可以改进的算法
-    int clkRow = 0, clkCol = 0, clkId = -1;
-    bool clk = getRowCol(clkPos, clkRow, clkCol);
-    // 如果点到了棋盘外面，直接结束
-    if (!clk) return;
-
-
-    // 点到了棋子，并且棋子没死！则更新clkId
-    if (m_hasChess[clkRow][clkCol] != -1 && !m_chess[m_hasChess[clkRow][clkCol]].m_dead){
-        clkId = m_hasChess[clkRow][clkCol];
-    }
-
-
+// 实现点击，选中，走子，吃子等
+void Board::click(int clkId, int clkRow, int clkCol){
     // 如果前面没有点到棋子，那么只是选中
     if (m_selectId == -1){
         // 这次也没点到棋子
@@ -374,6 +459,8 @@ void Board::mouseReleaseEvent(QMouseEvent* event){
     // 如果前面点到了棋子，则是走子或吃子
         // 判断是否符合规则
         if (!canMove(m_selectId, clkRow, clkCol, clkId)) return;
+        // 己方回合移动完会被将军，TODO显示不能这么走的信息
+        if (jiangJun(m_selectId, clkRow, clkCol, clkId)) return;
 
         // 走子
         // （先把点击位置的存在棋子id设置好，再把原来位置的存在棋子id设为-1）
@@ -390,6 +477,25 @@ void Board::mouseReleaseEvent(QMouseEvent* event){
         m_redTurn = !m_redTurn;
     }
     update();
+}
+
+
+// 鼠标点击，走子
+void Board::mouseReleaseEvent(QMouseEvent* event){
+    m_clkPos = event->pos();
+    // 找到最靠近的交叉点，然后判断在不在圆内
+    // TODO 可以改进的算法
+    int clkRow = 0, clkCol = 0, clkId = -1;
+    bool clk = getRowCol(m_clkPos, clkRow, clkCol);
+    // 如果点到了棋盘外面，直接结束
+    if (!clk) return;
+
+    // 点到了棋子，并且棋子没死！则更新clkId
+    if (m_hasChess[clkRow][clkCol] != -1 && !m_chess[m_hasChess[clkRow][clkCol]].m_dead){
+        clkId = m_hasChess[clkRow][clkCol];
+    }
+
+    click(clkId, clkRow, clkCol);
 }
 
 

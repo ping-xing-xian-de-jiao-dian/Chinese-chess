@@ -35,10 +35,14 @@ QString Chess::getText(){
 
 
 // 初始化
-void Chess::init(int id){
+void Chess::init(int id, bool red){
     m_id = id;
     m_dead = false;
-    m_red = (id < 16);
+    if (red){
+        m_red = !(id < 16);
+    } else {
+        m_red = (id < 16);
+    }
     // 位置确定
     struct {
         int row, col;
@@ -62,14 +66,27 @@ void Chess::init(int id){
         {3,8,Chess::BING}
     };
 
-    if (m_red){
-        m_row = pos[id].row;
-        m_col = pos[id].col;
-        m_type = pos[id].type;
+    if (id >= 16) id -= 16;
+    if (!red){
+        if (m_red){
+            m_row = pos[id].row;
+            m_col = pos[id].col;
+            m_type = pos[id].type;
+        } else {
+            m_row = 9 - pos[id].row;
+            m_col = 8 - pos[id].col;
+            m_type = pos[id].type;
+        }
     } else {
-        m_row = 9 - pos[id - 16].row;
-        m_col = 8 - pos[id - 16].col;
-        m_type = pos[id - 16].type;
+        if (!m_red){
+            m_row = pos[id].row;
+            m_col = pos[id].col;
+            m_type = pos[id].type;
+        } else {
+            m_row = 9 - pos[id].row;
+            m_col = 8 - pos[id].col;
+            m_type = pos[id].type;
+        }
     }
 }
 

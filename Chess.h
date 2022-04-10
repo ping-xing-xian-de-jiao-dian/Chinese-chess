@@ -20,8 +20,8 @@ public:
     // 根据类型返回象棋上的字
     QString getText();
 
-    // 初始化
-    void init(int);
+    // 初始化，bool为true则红棋在下面
+    void init(int, bool);
 };
 
 #endif // CHESS_H

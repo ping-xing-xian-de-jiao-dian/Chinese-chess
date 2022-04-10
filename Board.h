@@ -25,6 +25,10 @@ public:
     int m_selectId;
     // 是否轮到红棋下
     bool m_redTurn;
+    // 红棋在下面
+    bool m_redUnder;
+    // 点击位置
+    QPoint m_clkPos;
 
 
 
@@ -33,6 +37,9 @@ public:
 
     // 绘制棋子
     void drawChess(QPainter&, int);
+
+    // 执红旗黑棋初始化
+    void initRedBlack(bool);
 
     // 根据棋子id或row和col把row和col转换为像素坐标
     QPoint rowcol2pixal(int);
@@ -44,6 +51,9 @@ public:
     // 判断离点击点最近的交叉点，如果没点到，返回false
     bool getRowCol(QPoint, int&, int&);
 
+    // 实现点击，选中，走子，吃子等
+    virtual void click(int, int, int);
+
     // 实现走棋规则
     bool canMove(int, int, int, int);
     bool canMoveJiang(int, int, int, int);
@@ -54,6 +64,8 @@ public:
     bool canMovePao(int, int, int, int);
     bool canMoveBing(int, int, int, int);
 
+    // 是否是将军状态
+    bool jiangJun(int, int, int, int);
 
 
 
