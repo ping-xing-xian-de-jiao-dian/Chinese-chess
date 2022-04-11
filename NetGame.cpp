@@ -1,28 +1,42 @@
 #include "NetGame.h"
 #include <QDebug>
 
+const QString ip = "192.168.3.38";
+const int port = 9999;
+
 NetGame::NetGame(bool isServer) {
     // 随机数，用于随机接收方是红方还是黑方
     srand(unsigned(time(nullptr)));
 
     m_server = nullptr;
     m_socket = nullptr;
+    m_connectLabel = nullptr;
 
     if (isServer){
         m_server = new QTcpServer(this);
         // 监听
-        m_server->listen(QHostAddress::Any, 9999);
+        m_server->listen(QHostAddress::Any, port);
         // 连接
         // 当有人来连接我们的时候，slotNewConnection()函数被调用
         connect(m_server, SIGNAL(newConnection()), this, SLOT(slotNewConnection()));
     } else {
         m_socket = new QTcpSocket(this);
-        m_socket->connectToHost(QHostAddress("127.0.0.1"), 9999);
+        m_socket->connectToHost(QHostAddress(ip), port);
         // 连接后调用接收函数slotRecv()
         connect(m_socket, SIGNAL(readyRead()), this, SLOT(slotRecv()));
     }
 }
 
+
+// 显示连接信息
+void NetGame::showConnectMessage(){
+    if (m_connectLabel) return;
+    m_connectLabel = new QLabel(this);
+    m_connectLabel->setText("connected");
+    m_connectLabel->setGeometry(10 * m_gridSize, m_gridSize, 5 * m_gridSize, m_gridSize);
+    m_connectLabel->setFont(QFont("楷体", m_wordSize / 2, 300));
+    m_connectLabel->show();
+}
 
 
 // 鼠标点击，选中，走子，吃子并发送
@@ -53,6 +67,7 @@ void NetGame::click(int clkId, int clkRow, int clkCol){
 
 // 客户端连接后调用函数
 void NetGame::slotNewConnection(){
+    showConnectMessage();
     // 如果socket不为空，不接受其它连接
     if (m_socket) return;
 
@@ -60,7 +75,6 @@ void NetGame::slotNewConnection(){
     m_socket = m_server->nextPendingConnection();
     // 连接后调用接收函数slotRecv()
     connect(m_socket, SIGNAL(readyRead()), this, SLOT(slotRecv()));
-    qDebug() << "connect";
 
     // 给对方发送数据
     // 执红方还是黑方，服务器发出，客户端接收1为红
@@ -80,6 +94,7 @@ void NetGame::slotNewConnection(){
 
 // 服务端连接后调用函数
 void NetGame::slotRecv(){
+    showConnectMessage();
     // 接收到的消息，字节数组
     QByteArray buff = m_socket->readAll();
     char command = buff[0];
@@ -109,13 +124,7 @@ void NetGame::slotRecv(){
 
 
 
-
-
-
-
-
-
-
 NetGame::~NetGame(){
-
+    m_socket->close();
+    m_server->close();
 }

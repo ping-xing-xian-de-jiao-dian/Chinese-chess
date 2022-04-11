@@ -3,6 +3,7 @@
 #include "Board.h"
 #include "NetGame.h"
 #include <QMessageBox>
+#include <QLabel>
 
 int main(int argc, char *argv[])
 {
@@ -19,7 +20,8 @@ int main(int argc, char *argv[])
 
     // 抽象了窗口
     NetGame board(isServer);
-    board.resize(800,900);
+    board.resize(1100,900);
+    // 走棋信息初始化
     board.show();
 
     // 进入消息循环，等待用户输入（点击、拖动等）

@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include "Chess.h"
+#include <QLabel>
 
 class Board : public QWidget
 {
@@ -29,6 +30,9 @@ public:
     bool m_redUnder;
     // 点击位置
     QPoint m_clkPos;
+    // 走棋信息
+    QLabel* m_messageLabel;
+    QString m_message;
 
 
 
@@ -65,8 +69,15 @@ public:
     bool canMoveBing(int, int, int, int);
 
     // 是否是将军状态
-    bool jiangJun(int, int, int, int);
+    bool beiJiangJun(int, int, int, int);
 
+    // 列号转换为中文数字（分我方还是对方）
+    QString getChineseNum(int, int);
+    // 显示走子信息
+    void chessMoveMessage(int, int, int);
+
+    // 判断是否游戏结束
+    bool gameOver(int, int, int, int);
 
 
 

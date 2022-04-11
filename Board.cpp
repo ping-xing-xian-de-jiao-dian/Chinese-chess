@@ -4,6 +4,7 @@
 #include <QMouseEvent>
 #include <QVector>
 #include <QDebug>
+#include <math.h>
 
 
 // 构造函数初始化
@@ -14,6 +15,7 @@ Board::Board(QWidget *parent) : QWidget(parent){
     m_wordSize = 32;
     m_selectId = -1;
     m_redTurn = true;
+    m_message = "";
     for (int i = 0; i < 10; ++i){
         for (int j = 0; j < 9; ++j){
             m_hasChess[i][j] = -1;
@@ -23,6 +25,13 @@ Board::Board(QWidget *parent) : QWidget(parent){
     // 32个棋子初始化
     m_redUnder = true;
     initRedBlack(m_redUnder);
+
+    // 走棋信息
+    m_messageLabel = new QLabel(this);
+    m_messageLabel->setText(m_message);
+    m_messageLabel->setGeometry(10 * m_gridSize, 5 * m_gridSize, 5 * m_gridSize, m_gridSize);
+    m_messageLabel->setFont(QFont("楷体", m_wordSize / 2, 300));
+    m_messageLabel->show();
 }
 
 
@@ -128,7 +137,7 @@ bool Board::getRowCol(QPoint pt, int &row, int &col){
 
 
 // 判断己方移动完后是否被将军，id小的是对面的
-bool Board::jiangJun(int selectId, int clkRow, int clkCol, int clkId){
+bool Board::beiJiangJun(int selectId, int clkRow, int clkCol, int clkId){
     // 我方将军id为20
     int myJiangId = 20;
     // *****为了防止对面在模仿的时候判定，例如客户端红棋将军黑棋，服务端模拟红棋时黑棋发现自己在送将，所以一定要走哪个用哪边将军判定！！！！
@@ -445,6 +454,110 @@ bool Board::canMove(int selectId, int clkRow, int clkCol, int clkId){
 }
 
 
+// 列号转换为中文数字（分我方还是对方）
+QString Board::getChineseNum(int num, int selectId){
+    if (num < 0 || num > 8) return "错误！";
+    QVector<QString> nums = {
+        "", "一", "二", "三", "四", "五", "六", "七", "八", "九"
+    };
+    // 对方
+    if (selectId >= 0 && selectId < 16) return nums[1 + num];
+    else if (selectId >= 16 && selectId < 32) return nums[9 - num];
+    else return nums[num];
+}
+
+// 显示走子信息
+void Board::chessMoveMessage(int selectId, int clkRow, int clkCol){
+    int type = m_chess[selectId].m_type;
+    // 判断同列上是否有相同类型的子
+    int row;
+    for (row = 0; row < 10; ++row){
+        if (row == m_chess[selectId].m_row) continue;
+        int id = m_hasChess[row][m_chess[selectId].m_col];
+        if (id == -1) continue;
+        // 同色，同类型，没死
+        if (m_chess[id].m_red == m_chess[selectId].m_red &&
+                m_chess[id].m_type == m_chess[selectId].m_type &&
+                !m_chess[id].m_dead){
+            break;
+        }
+    }
+    // 文本组合
+    // 前后同类型
+    if (row < 10){
+        if (m_chess[selectId].m_row < row){
+            if (selectId >= 16) m_message = "前";
+            else m_message = "后";
+        } else {
+            if (selectId >= 16) m_message = "后";
+            else m_message = "前";
+        }
+        m_message += m_chess[selectId].getText();
+    } else {
+    // 不存在前后同类型子的情况
+        m_message = m_chess[selectId].getText() + getChineseNum(m_chess[selectId].m_col, selectId);
+    }
+    // 后两个字，进退多少，要注意马，士，象的打谱规则不太一样
+    if (clkRow != m_chess[selectId].m_row){
+        if (clkRow < m_chess[selectId].m_row){
+            if (selectId >= 16) m_message += "进";
+            else m_message += "退";
+        } else {
+            if (selectId >= 16) m_message += "退";
+            else m_message += "进";
+        }
+        if (type != Chess::MA && type != Chess::SHI && type != Chess::XIANG){
+            m_message += getChineseNum(abs(m_chess[selectId].m_row - clkRow), -1);
+        } else {
+            m_message += getChineseNum(clkCol, selectId);
+        }
+    } else {
+        m_message += "平";
+        m_message += getChineseNum(clkCol, selectId);
+    }
+    m_messageLabel->setText(m_message);
+    if (m_chess[selectId].m_red) m_messageLabel->setStyleSheet("color:red;");
+    else m_messageLabel->setStyleSheet("color:black;");
+}
+
+
+// 判断是否游戏结束
+bool Board::gameOver(int selectId, int clkRow, int clkCol, int clkId){
+    // 判断对方是否被将军
+    int start = 0, end = 16, jiangJunId = 20;
+    if (selectId >= 16){
+        jiangJunId = 4; start = 16; end = 32;
+    }
+    // 如果全都没将军，return false
+    int id;
+    for (id = start; id < end; ++id){
+        if (canMove(id, m_chess[jiangJunId].m_row, m_chess[jiangJunId].m_col, jiangJunId)) break;
+    }
+    // 全都没有将军
+    if (id == end) return false;
+
+
+    // TODO是否绝杀，对方所有走动的情况都会beiJiangJun，按频率来
+    // 算法可以改进
+    if (selectId < 16){
+        start = 16; end = 32; jiangJunId = 4;
+    } else {
+        start = 0; end = 16; jiangJunId = 20;
+    }
+    for (int id = start; id < end; ++id){
+        for (int row = 0; row < 10; ++row){
+            for (int col = 0; col < 9; ++col){
+                if (canMove(id, row, col, m_hasChess[row][col]) &&
+                        !beiJiangJun(id, row, col, m_hasChess[row][col])){
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+
 // 实现点击，选中，走子，吃子等
 void Board::click(int clkId, int clkRow, int clkCol){
     // 如果前面没有点到棋子，那么只是选中
@@ -459,8 +572,16 @@ void Board::click(int clkId, int clkRow, int clkCol){
     // 如果前面点到了棋子，则是走子或吃子
         // 判断是否符合规则
         if (!canMove(m_selectId, clkRow, clkCol, clkId)) return;
-        // 己方回合移动完会被将军，TODO显示不能这么走的信息
-        if (jiangJun(m_selectId, clkRow, clkCol, clkId)) return;
+        // 己方回合移动完会被将军，显示不能这么走的信息
+        if (beiJiangJun(m_selectId, clkRow, clkCol, clkId)) {
+            m_messageLabel->setText("不能送将！");
+            if (m_chess[m_selectId].m_red) m_messageLabel->setStyleSheet("color:red;");
+            else m_messageLabel->setStyleSheet("color:black;");
+            return;
+        }
+
+        // 显示走子信息
+        chessMoveMessage(m_selectId, clkRow, clkCol);
 
         // 走子
         // （先把点击位置的存在棋子id设置好，再把原来位置的存在棋子id设为-1）
@@ -473,6 +594,19 @@ void Board::click(int clkId, int clkRow, int clkCol){
         if (clkId != -1){
             m_chess[clkId].m_dead = true;
         }
+
+        // 绝杀判定
+        if (gameOver(m_selectId, clkRow, clkCol, clkId)){
+            // 游戏结束
+            // 获胜方颜色
+            QString winColor;
+            if (m_redTurn) winColor = "红";
+            else winColor = "黑";
+            m_message = "绝杀，无解！\n" + winColor + "方胜利！";
+            m_messageLabel->setText(m_message);
+            return;
+        }
+
         m_selectId = -1;
         m_redTurn = !m_redTurn;
     }
@@ -484,7 +618,6 @@ void Board::click(int clkId, int clkRow, int clkCol){
 void Board::mouseReleaseEvent(QMouseEvent* event){
     m_clkPos = event->pos();
     // 找到最靠近的交叉点，然后判断在不在圆内
-    // TODO 可以改进的算法
     int clkRow = 0, clkCol = 0, clkId = -1;
     bool clk = getRowCol(m_clkPos, clkRow, clkCol);
     // 如果点到了棋盘外面，直接结束

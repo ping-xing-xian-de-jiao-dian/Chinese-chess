@@ -22,10 +22,14 @@ public:
     // 网络服务，服务端两个都用，客户端只用socket
     QTcpServer* m_server;
     QTcpSocket* m_socket;
+    QLabel* m_connectLabel;
 
 
     // 鼠标点击，选中，走子，吃子并发送
     void click(int, int, int);
+
+    // 显示连接信息
+    void showConnectMessage();
 
 
 // 槽函数
