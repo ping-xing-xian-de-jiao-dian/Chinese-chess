@@ -28,13 +28,19 @@ public:
     bool m_redTurn;
     // 红棋在下面
     bool m_redUnder;
+    // 一共过了多少回合
+    int m_redTurnNum;
+    int m_blackTurnNum;
     // 点击位置
     QPoint m_clkPos;
     // 走棋信息
     QLabel* m_messageLabel;
     QString m_message;
-
-
+    // 技能点
+    int m_redSkillPoint;
+    int m_blackSkillPoint;
+    QLabel* m_redSkillLabel;
+    QLabel* m_blackSkillLabel;
 
     // 绘制棋盘
     void paintEvent(QPaintEvent* );
@@ -78,6 +84,9 @@ public:
 
     // 判断是否游戏结束
     bool gameOver(int, int, int, int);
+
+    // 棋子升级
+    virtual void levelUp(int, int, int);
 
 
 

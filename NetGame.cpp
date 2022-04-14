@@ -4,6 +4,17 @@
 const QString ip = "192.168.3.38";
 const int port = 9999;
 
+
+/* 给对方发送的消息
+ * 1. 执红方还是黑方，服务器发出，客户端接收
+ *    [1, 1/0]第一个字节固定1，第二个字节1表示接收方走红棋，0表示接收方走黑棋
+ * 2. 点击信息，点击的坐标，棋子Id
+ *    [2, row, col, clkId]
+ * 3. 右键升级，点击的坐标，棋子Id
+ *    [3, row, col, clkId]
+ */
+
+
 NetGame::NetGame(bool isServer) {
     // 随机数，用于随机接收方是红方还是黑方
     srand(unsigned(time(nullptr)));
@@ -64,6 +75,22 @@ void NetGame::click(int clkId, int clkRow, int clkCol){
 }
 
 
+// 鼠标右键升级信息
+void NetGame::levelUp(int clkRow, int clkCol, int clkId){
+    Board::levelUp(clkRow, clkCol, clkId);
+
+    char buff[4];
+    buff[0] = 3;
+    buff[1] = char(9 - clkRow);
+    buff[2] = char(8 - clkCol);
+    // 棋子Id转换
+    if (clkId < 16 && clkId > -1) clkId += 16;
+    else if (clkId >= 16) clkId -= 16;
+
+    buff[3] = char(clkId);
+    m_socket->write(buff, 4);
+}
+
 
 // 客户端连接后调用函数
 void NetGame::slotNewConnection(){
@@ -119,6 +146,12 @@ void NetGame::slotRecv(){
         }
         // 走子，吃子，无脑复制
         Board::click(id, row, col);
+    } else if (command == 3) {
+    // 棋子升级
+        int row = buff[1];
+        int col = buff[2];
+        int id = buff[3];
+        Board::levelUp(row, col, id);
     }
 }
 

@@ -1,4 +1,5 @@
 #include "Chess.h"
+#include <string>
 
 Chess::Chess(){
 
@@ -33,9 +34,15 @@ QString Chess::getText(){
 }
 
 
+// 返回棋子等级
+QString Chess::getLevel(){
+    return QString::number(m_level);
+}
+
 
 // 初始化
 void Chess::init(int id, bool red){
+    m_level = 0;
     m_id = id;
     m_dead = false;
     if (red){

@@ -16,6 +16,10 @@ Board::Board(QWidget *parent) : QWidget(parent){
     m_selectId = -1;
     m_redTurn = true;
     m_message = "";
+    m_redTurnNum = 0;
+    m_blackTurnNum = 0;
+    m_redSkillPoint = 0;
+    m_blackSkillPoint = 0;
     for (int i = 0; i < 10; ++i){
         for (int j = 0; j < 9; ++j){
             m_hasChess[i][j] = -1;
@@ -32,6 +36,13 @@ Board::Board(QWidget *parent) : QWidget(parent){
     m_messageLabel->setGeometry(10 * m_gridSize, 5 * m_gridSize, 5 * m_gridSize, m_gridSize);
     m_messageLabel->setFont(QFont("楷体", m_wordSize / 2, 300));
     m_messageLabel->show();
+
+    // 技能点信息
+    m_redSkillLabel = new QLabel(this);
+    m_redSkillLabel->setText("");
+    m_redSkillLabel->setGeometry(10 * m_gridSize, 9 * m_gridSize, 5 * m_gridSize, m_gridSize);
+    m_redSkillLabel->setFont(QFont("楷体", m_wordSize / 2, 300));
+    m_redSkillLabel->show();
 }
 
 
@@ -78,9 +89,16 @@ void Board::paintEvent(QPaintEvent *){
     for (int id = 0; id < 32; ++id){
         drawChess(painter, id);
     }
+
+    // 技能点
+    if (m_redUnder) {
+        m_redSkillLabel->setText("我方技能点: " + QString::number(m_redSkillPoint));
+        m_messageLabel->setStyleSheet("color:red;");
+    } else {
+        m_redSkillLabel->setText("我方技能点: " + QString::number(m_blackSkillPoint));
+        m_messageLabel->setStyleSheet("color:black;");
+    }
 }
-
-
 
 
 // 绘制棋子
@@ -100,8 +118,8 @@ void Board::drawChess(QPainter &painter, int id){
     // 确定字的位置，字体设置
     QPoint c = rowcol2pixal(id);
     QRect rect(c.x() - m_chessR, c.y() - m_chessR, m_chessR * 2, m_chessR * 2);
-    painter.setFont(QFont("楷体", m_wordSize, 700));
-    painter.drawText(rect, m_chess[id].getText(), QTextOption(Qt::AlignCenter));
+    painter.setFont(QFont("楷体", m_wordSize / 2, 700));
+    painter.drawText(rect, m_chess[id].getText() + m_chess[id].getLevel(), QTextOption(Qt::AlignCenter));
 }
 
 
@@ -607,6 +625,15 @@ void Board::click(int clkId, int clkRow, int clkCol){
             return;
         }
 
+        // 增加技能点
+        if (m_redUnder && m_redTurn){
+            ++m_redTurnNum;
+            if (m_redTurnNum % 2 == 0) ++m_redSkillPoint;
+        } else if (!m_redUnder && !m_redTurn) {
+            ++m_blackTurnNum;
+            if (m_blackTurnNum % 2 == 0) ++m_blackSkillPoint;
+        }
+
         m_selectId = -1;
         m_redTurn = !m_redTurn;
     }
@@ -614,21 +641,46 @@ void Board::click(int clkId, int clkRow, int clkCol){
 }
 
 
+void Board::levelUp(int clkRow, int clkCol, int clkId){
+    // 消耗一技能点
+    if (m_chess[clkId].m_red){
+        if (m_redSkillPoint <= 0) return;
+        --m_redSkillPoint;
+    } else {
+        if (m_blackSkillPoint <= 0) return;
+        --m_blackSkillPoint;
+    }
+    ++m_chess[clkId].m_level;
+    update();
+}
+
+
 // 鼠标点击，走子
 void Board::mouseReleaseEvent(QMouseEvent* event){
     m_clkPos = event->pos();
+
     // 找到最靠近的交叉点，然后判断在不在圆内
     int clkRow = 0, clkCol = 0, clkId = -1;
     bool clk = getRowCol(m_clkPos, clkRow, clkCol);
     // 如果点到了棋盘外面，直接结束
     if (!clk) return;
 
-    // 点到了棋子，并且棋子没死！则更新clkId
-    if (m_hasChess[clkRow][clkCol] != -1 && !m_chess[m_hasChess[clkRow][clkCol]].m_dead){
-        clkId = m_hasChess[clkRow][clkCol];
-    }
+    // 左键，正常象棋
+    if (event->button() == Qt::LeftButton){
+        // 点到了棋子，并且棋子没死！则更新clkId
+        if (m_hasChess[clkRow][clkCol] != -1 && !m_chess[m_hasChess[clkRow][clkCol]].m_dead){
+            clkId = m_hasChess[clkRow][clkCol];
+        }
 
-    click(clkId, clkRow, clkCol);
+        click(clkId, clkRow, clkCol);
+    } else if (event->button() == Qt::RightButton) {
+    // 右键，增加技能点
+        // 点到了棋子，并且棋子没死！则升级！
+        int clkId = m_hasChess[clkRow][clkCol];
+        if (clkId != -1 && !m_chess[clkId].m_dead){
+            levelUp(clkRow, clkCol, clkId);
+        }
+    }
 }
 
 
