@@ -86,8 +86,19 @@ public:
     bool gameOver(int, int, int, int);
 
     // 棋子升级
-    virtual void levelUp(int, int, int);
+    virtual void levelUp(int, int, int, int);
 
+    // 将、士、象的技能，都是移动完触发的
+    void jiangShiXiangLevel(int, int, int, int);
+
+    // 兵的技能是死亡后触发的
+    void bingLevel(int, int, int, int);
+
+    // 将军提示
+    void jiangJunWarning(int, int, int, int);
+
+    // 颜色转换为中文
+    QString getChineseColor(int);
 
 
 

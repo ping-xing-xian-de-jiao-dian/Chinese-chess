@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
 
     // 抽象了窗口
     NetGame board(isServer);
-    board.resize(1100,900);
+    board.resize(1200,900);
     // 走棋信息初始化
     board.show();
 

@@ -8,8 +8,8 @@ const int port = 9999;
 /* 给对方发送的消息
  * 1. 执红方还是黑方，服务器发出，客户端接收
  *    [1, 1/0]第一个字节固定1，第二个字节1表示接收方走红棋，0表示接收方走黑棋
- * 2. 点击信息，点击的坐标，棋子Id
- *    [2, row, col, clkId]
+ * 2. 点击信息，点击的坐标，棋子Id，所有棋子等级, 走子信息
+ *    [2, row, col, clkId, clkLevel0~clkLevel31, 100]
  * 3. 右键升级，点击的坐标，棋子Id
  *    [3, row, col, clkId]
  */
@@ -62,33 +62,47 @@ void NetGame::click(int clkId, int clkRow, int clkCol){
 
     Board::click(clkId, clkRow, clkCol);
 
-    char buff[4];
+    char buff[136];
     buff[0] = 2;
     buff[1] = char(9 - clkRow);
     buff[2] = char(8 - clkCol);
     // 棋子Id转换
     if (clkId < 16 && clkId > -1) clkId += 16;
     else if (clkId >= 16) clkId -= 16;
-
     buff[3] = char(clkId);
-    m_socket->write(buff, 4);
+
+    for (int id = 0; id < 32; ++id){
+        int sid = id;
+        if (sid < 16) sid +=16;
+        else sid -= 16;
+        buff[id + 4] = char(m_chess[sid].m_level);
+    }
+
+    m_socket->write(buff, 136);
 }
 
 
 // 鼠标右键升级信息
-void NetGame::levelUp(int clkRow, int clkCol, int clkId){
-    Board::levelUp(clkRow, clkCol, clkId);
+void NetGame::levelUp(int selectId, int clkRow, int clkCol, int clkId){
+    Board::levelUp(selectId, clkRow, clkCol, clkId);
 
-    char buff[4];
+    char buff[5];
     buff[0] = 3;
-    buff[1] = char(9 - clkRow);
-    buff[2] = char(8 - clkCol);
+
+    // 棋子Id转换
+    if (selectId < 16 && selectId > -1) selectId += 16;
+    else if (selectId >= 16) selectId -= 16;
+
+    buff[1] = char(selectId);
+    buff[2] = char(9 - clkRow);
+    buff[3] = char(8 - clkCol);
+
     // 棋子Id转换
     if (clkId < 16 && clkId > -1) clkId += 16;
     else if (clkId >= 16) clkId -= 16;
 
-    buff[3] = char(clkId);
-    m_socket->write(buff, 4);
+    buff[4] = char(clkId);
+    m_socket->write(buff, 5);
 }
 
 
@@ -137,6 +151,9 @@ void NetGame::slotRecv(){
         int row = buff[1];
         int col = buff[2];
         int id = buff[3];
+        for (int id = 0; id < 32; ++id) {
+            m_chess[id].m_level = buff[id + 4];
+        }
 
         // 如果是选中棋子，不给对方看
         // 如果更换选子，也不给对方看
@@ -147,11 +164,12 @@ void NetGame::slotRecv(){
         // 走子，吃子，无脑复制
         Board::click(id, row, col);
     } else if (command == 3) {
-    // 棋子升级
-        int row = buff[1];
-        int col = buff[2];
-        int id = buff[3];
-        Board::levelUp(row, col, id);
+    // 右键传递
+        int selectId = buff[1];
+        int row = buff[2];
+        int col = buff[3];
+        int clkId = buff[4];
+        Board::levelUp(selectId, row, col, clkId);
     }
 }
 

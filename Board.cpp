@@ -18,8 +18,8 @@ Board::Board(QWidget *parent) : QWidget(parent){
     m_message = "";
     m_redTurnNum = 0;
     m_blackTurnNum = 0;
-    m_redSkillPoint = 0;
-    m_blackSkillPoint = 0;
+    m_redSkillPoint = 10;
+    m_blackSkillPoint = 10;
     for (int i = 0; i < 10; ++i){
         for (int j = 0; j < 9; ++j){
             m_hasChess[i][j] = -1;
@@ -34,7 +34,7 @@ Board::Board(QWidget *parent) : QWidget(parent){
     m_messageLabel = new QLabel(this);
     m_messageLabel->setText(m_message);
     m_messageLabel->setGeometry(10 * m_gridSize, 5 * m_gridSize, 5 * m_gridSize, m_gridSize);
-    m_messageLabel->setFont(QFont("楷体", m_wordSize / 2, 300));
+    m_messageLabel->setFont(QFont("楷体", m_wordSize - 20, 300));
     m_messageLabel->show();
 
     // 技能点信息
@@ -208,6 +208,70 @@ bool Board::beiJiangJun(int selectId, int clkRow, int clkCol, int clkId){
 }
 
 
+// 将、士、象的技能，都是移动完触发的
+// 将2级技能，走一步获得一个技能点
+// 士2级技能，随机使己方一个棋子等级+1
+// 象1级技能，吃子后额外获得一个技能点
+void Board::jiangShiXiangLevel(int selectId, int clkRow, int clkCol, int clkId){
+    if (selectId < 16) return;
+    Chess thisChess = m_chess[selectId];
+    if (thisChess.m_type == Chess::JIANG){
+        if (thisChess.m_level >= 2){
+            if (thisChess.m_red) ++m_redSkillPoint;
+            else ++m_blackSkillPoint;
+            m_message = m_messageLabel->text() + "\n2级" + thisChess.getText() +
+                    "移动，" + getChineseColor(selectId) + "方获得1技能点";
+            m_messageLabel->setText(m_message);
+        }
+    } else if (thisChess.m_type == Chess::SHI) {
+        if (thisChess.m_level >= 2){
+            // 产生16-31的随机数，加到没有死的棋子上
+            int ranNum;
+            while (true){
+                ranNum = rand() % 16 + 16;
+                if (m_chess[ranNum].m_dead) continue;
+                break;
+            }
+            m_message = m_messageLabel->text() + "\n2级士移动，" + getChineseColor(ranNum) +
+                    "方" + m_chess[ranNum].getText() + "等级+1";
+            m_messageLabel->setText(m_message);
+            ++m_chess[ranNum].m_level;
+        }
+    } else if (thisChess.m_type == Chess::XIANG) {
+        if (thisChess.m_level >= 1){
+            if (clkId != -1){
+                if (thisChess.m_red) ++m_redSkillPoint;
+                else ++m_blackSkillPoint;
+                m_message = m_messageLabel->text() + "\n1级" + thisChess.getText() +
+                        "吃子，" + getChineseColor(selectId) + "方额外获得1技能点";
+                m_messageLabel->setText(m_message);
+            }
+        }
+    }
+}
+
+// 兵的技能，亡语
+// 兵1级及以上技能，死亡后随机分配(等级+1)技能点给己方棋子
+void Board::bingLevel(int selectId, int clkRow, int clkCol, int clkId){
+    // 保证只触发一次效果
+    if (clkId >= 16 || clkId == -1) return;
+    if (m_chess[clkId].m_type == Chess::BING && m_chess[clkId].m_level >= 1){
+        for (int i = 0; i < m_chess[clkId].m_level + 1; ++i){
+            // 产生0-15的随机数，加到没有死的棋子上
+            int ranNum;
+            while (true){
+                ranNum = rand() % 16;
+                if (m_chess[ranNum].m_dead) continue;
+                ++m_chess[ranNum].m_level; break;
+            }
+        }
+        m_message = m_messageLabel->text() + "\n" + QString::number(m_chess[clkId].m_level) + "级" +
+                m_chess[clkId].getText() + "死亡，随机使" + getChineseColor(clkId) + "方" +
+                QString::number(m_chess[clkId].m_level + 1) + "个棋子升级";
+        m_messageLabel->setText(m_message);
+    }
+}
+
 // 将的移动规则
 bool Board::canMoveJiang(int selectId, int clkRow, int clkCol, int clkId){
     int row = m_chess[selectId].m_row;
@@ -297,6 +361,7 @@ bool Board::canMoveXiang(int selectId, int clkRow, int clkCol, int clkId){
 }
 
 // 車的移动规则
+// 5级車可以斜线移动（变成皇后）TODO打谱会不准
 bool Board::canMoveJu(int selectId, int clkRow, int clkCol, int clkId){
     // 走直线，不能越过别的子
     int row = m_chess[selectId].m_row;
@@ -315,6 +380,29 @@ bool Board::canMoveJu(int selectId, int clkRow, int clkCol, int clkId){
         for (int j = col + 1; j < clkCol; ++j){
             if (m_hasChess[row][j] != -1) return false;
         }
+    } else if (m_chess[selectId].m_level >= 5 && abs(row - clkRow) == abs(col - clkCol)) {
+        // 斜线移动判定
+        // 左下右上斜线
+        if (row + col == clkRow + clkCol){
+            // 循环起始点放在左下角
+            if (row < clkRow){
+                int temp = row; row = clkRow; clkRow = temp;
+                temp = col; col = clkCol; clkCol = temp;
+            }
+            for (int i = row - 1, j = col + 1; i > clkRow && j < clkCol; --i, ++j){
+                if (m_hasChess[i][j] != -1) return false;
+            }
+        } else {
+        // 左上右下斜线
+            // 循环起始点放在左上角
+            if (row > clkRow){
+                int temp = row; row = clkRow; clkRow = temp;
+                temp = col; col = clkCol; clkCol = temp;
+            }
+            for (int i = row + 1, j = col + 1; i < clkRow && j < clkCol; ++i, ++j){
+                if (m_hasChess[i][j] != -1) return false;
+            }
+        }
     } else {
         return false;
     }
@@ -323,6 +411,7 @@ bool Board::canMoveJu(int selectId, int clkRow, int clkCol, int clkId){
 }
 
 // 马的移动规则
+// 5级马可以无视别马脚
 bool Board::canMoveMa(int selectId, int clkRow, int clkCol, int clkId){
     // 日字格移动，不能被别马脚
     int row = m_chess[selectId].m_row;
@@ -334,7 +423,11 @@ bool Board::canMoveMa(int selectId, int clkRow, int clkCol, int clkId){
     };
     for (auto dir : dirs){
         if (row + dir[0] == clkRow && col + dir[1] == clkCol){
-            if (m_hasChess[row + dir[2]][col + dir[3]] != -1) return false;
+            // 别马脚
+            if (m_hasChess[row + dir[2]][col + dir[3]] != -1) {
+                if (m_chess[selectId].m_level >= 5) return true;
+                return false;
+            }
             return true;
         }
     }
@@ -343,6 +436,7 @@ bool Board::canMoveMa(int selectId, int clkRow, int clkCol, int clkId){
 }
 
 // 炮的移动规则
+// 5级炮可以隔两个子打
 bool Board::canMovePao(int selectId, int clkRow, int clkCol, int clkId){
     // 吃子能越过一个子，不吃不行
     int row = m_chess[selectId].m_row;
@@ -369,6 +463,7 @@ bool Board::canMovePao(int selectId, int clkRow, int clkCol, int clkId){
             return false;
         }
         if (count == 1) return true;
+        if (m_chess[selectId].m_level >= 5 && count == 2) return true;
         return false;
     }
 }
@@ -471,6 +566,11 @@ bool Board::canMove(int selectId, int clkRow, int clkCol, int clkId){
     }
 }
 
+// 颜色转换为中文
+QString Board::getChineseColor(int id){
+    if (m_chess[id].m_red) return "红";
+    return "黑";
+}
 
 // 列号转换为中文数字（分我方还是对方）
 QString Board::getChineseNum(int num, int selectId){
@@ -576,6 +676,23 @@ bool Board::gameOver(int selectId, int clkRow, int clkCol, int clkId){
 }
 
 
+// 将军提示
+void Board::jiangJunWarning(int selectId, int clkRow, int clkCol, int clkId){
+    int jiangJunId = 4;
+    int start = 16, end = 32;
+    if (selectId < 16){
+        jiangJunId = 20; start = 0; end = 16;
+    }
+    // 判断是否有棋子正在将军
+    for (int id = start; id < end; ++id){
+        if (canMove(id, m_chess[jiangJunId].m_row, m_chess[jiangJunId].m_col, jiangJunId)){
+            m_messageLabel->setText(m_messageLabel->text() + "\n将军！");
+            break;
+        }
+    }
+}
+
+
 // 实现点击，选中，走子，吃子等
 void Board::click(int clkId, int clkRow, int clkCol){
     // 如果前面没有点到棋子，那么只是选中
@@ -601,6 +718,9 @@ void Board::click(int clkId, int clkRow, int clkCol){
         // 显示走子信息
         chessMoveMessage(m_selectId, clkRow, clkCol);
 
+        // 将士象的技能是移动完后触发的，所以要在这里触发，不能在canMove里
+        jiangShiXiangLevel(m_selectId, clkRow, clkCol, clkId);
+
         // 走子
         // （先把点击位置的存在棋子id设置好，再把原来位置的存在棋子id设为-1）
         m_hasChess[clkRow][clkCol] = m_hasChess[m_chess[m_selectId].m_row][m_chess[m_selectId].m_col];
@@ -611,7 +731,12 @@ void Board::click(int clkId, int clkRow, int clkCol){
         // 这次也点到了，吃子
         if (clkId != -1){
             m_chess[clkId].m_dead = true;
+            // 兵亡语判定
+            bingLevel(m_selectId, clkRow, clkCol, clkId);
         }
+
+        // 将军提示
+        jiangJunWarning(m_selectId, clkRow, clkCol, clkId);
 
         // 绝杀判定
         if (gameOver(m_selectId, clkRow, clkCol, clkId)){
@@ -641,16 +766,11 @@ void Board::click(int clkId, int clkRow, int clkCol){
 }
 
 
-void Board::levelUp(int clkRow, int clkCol, int clkId){
-    // 消耗一技能点
-    if (m_chess[clkId].m_red){
-        if (m_redSkillPoint <= 0) return;
-        --m_redSkillPoint;
-    } else {
-        if (m_blackSkillPoint <= 0) return;
-        --m_blackSkillPoint;
-    }
+// 升级棋子，并重定位
+void Board::levelUp(int selectId, int clkRow, int clkCol, int clkId){
     ++m_chess[clkId].m_level;
+    m_message = getChineseColor(clkId) + "方" + m_chess[clkId].getText() + "等级+1";
+    m_messageLabel->setText(m_message);
     update();
 }
 
@@ -678,7 +798,15 @@ void Board::mouseReleaseEvent(QMouseEvent* event){
         // 点到了棋子，并且棋子没死！则升级！
         int clkId = m_hasChess[clkRow][clkCol];
         if (clkId != -1 && !m_chess[clkId].m_dead){
-            levelUp(clkRow, clkCol, clkId);
+            // 消耗一技能点
+            if (m_chess[clkId].m_red){
+                if (m_redSkillPoint <= 0) return;
+                --m_redSkillPoint;
+            } else {
+                if (m_blackSkillPoint <= 0) return;
+                --m_blackSkillPoint;
+            }
+            levelUp(clkId, clkRow, clkCol, clkId);
         }
     }
 }

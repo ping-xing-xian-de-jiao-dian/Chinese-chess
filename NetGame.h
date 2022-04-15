@@ -25,7 +25,7 @@ public:
     void showConnectMessage();
 
     // 升级信息
-    void levelUp(int, int, int);
+    void levelUp(int, int, int, int);
 
 
 // 槽函数
